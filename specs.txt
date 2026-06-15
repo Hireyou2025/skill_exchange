@@ -1,0 +1,81 @@
+================================================================================
+          AI INTERVIEW MONITORING SYSTEM: EXPLAINABILITY LAYER SPECS
+================================================================================
+
+1. OVERVIEW
+-----------
+The Explainability Layer transforms raw tracking logs (gaze, head pose, blinks, 
+speech energy) into transparent, recruiter-grade behavioral intelligence. Every 
+scoring decision, integrity flag, and behavioral event is traceable, 
+evidence-backed, and qualified by a dynamic Confidence of Inference score.
+
+2. SYSTEM COMPONENTS
+--------------------
+The explainability system is implemented across three core files:
+- `scoring_trace.py`: Decomposes evaluation scores into positive and negative 
+  impact factors.
+- `event_reasoner.py`: Estimates inference confidence based on environmental noise 
+  and correlates behavioral signals to construct causal explanation chains.
+- `explanation_engine.py`: Aggregates frame-by-frame stats, determines metric 
+  evidence, and generates recruiter-readable summaries.
+
+3. EXPLAINABLE SCORING & MATHEMATICAL TRACEBACK
+-----------------------------------------------
+The final Session Score is calculated out of 100% and decomposed into five 
+underlying factors. The sum of these factors matches the final score exactly.
+
+Score Formula:
+  Session Score = (Attention + Head Pose + Comm) - (Gaze Dev + Stress + Integrity Penalty)
+
+Where:
+- Attention Consistency (Max +40): Proportional to centered gaze percentage 
+  (session_attention * 40).
+- Stable Head Pose (Max +20): Proportional to centered posture percentage 
+  (session_focus * 20).
+- Strong Communication (Max +40): Proportional to vocal responsiveness and 
+  expressed confidence (session_confidence * 40).
+- Frequent Gaze Deviation (Max -10): Penalty based on off-screen gaze ratio.
+- Elevated Stress (Max -20): Penalty based on rolling stress average.
+- Integrity Penalty: Computed dynamically to scale down the final score 
+  proportionally (Base Score * (1 - Integrity Score / 100)).
+
+4. DYNAMIC CONFIDENCE OF INFERENCE
+----------------------------------
+To avoid false positives under poor capture conditions, the system calculates 
+a dynamic confidence coefficient (0.0 to 1.0) and applies specific deductions:
+- Low Lighting (-0.15): Triggered if average frame brightness < 55.
+- Motion Blur (-0.15): Triggered if Laplacian variance of the frame < 90.
+- Unstable Landmarks (-0.20): Triggered if nose tip position jitter > 6.0px.
+- Partial Face Visibility (-0.20): Triggered if face mesh is lost or flickering.
+- ROI Instability (-0.10): Triggered if face width size variance > 8%.
+
+5. CAUSAL EVENT REASONING & CLUSTERING
+--------------------------------------
+When a behavioral threshold is crossed, the Event Reasoner inspects the rolling 
+state window to provide a causal chain explaining *why* the event occurred:
+- Attention Drop: Caused by off-screen gaze, head-down posture, or speech inactivity.
+- Stress Spike: Caused by increased blink frequency, speech hesitation (silence), 
+  or gaze instability.
+- Communication Confidence Improved: Caused by sustained verbal response or 
+  centered gaze alignment.
+- Integrity Warning: Caused by candidate absent from ROI or multiple faces detected.
+
+6. LEGAL & ETHICAL SAFETY BOUNDARIES
+------------------------------------
+To maintain legal compliance and prevent biased psychological labeling:
+- Avoid absolute declarations (e.g. "Candidate is lying / depressed / anxious").
+- Use descriptive behavioral terminology instead:
+  - "Elevated stress indicators detected"
+  - "Attention instability observed"
+  - "Behavioral confidence decreased temporarily"
+
+7. VISUALIZATIONS & REPORTING
+-----------------------------
+- Recruiter Dashboard: Renders live metrics, visual quality levels, current 
+  inference confidence, and scoring traceback contributors.
+- Graphical Session Report: Plots attention/focus scores with a shaded error-band 
+  representing the confidence interval, flags chronological events with causal 
+  chains, and prints a final recruiter insights summary.
+- Markdown Session Report: Automatically writes a structured, human-readable 
+  report (session_report.md) for post-interview review.
+================================================================================
