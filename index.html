@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Interview Monitoring System: Recruiter Intelligence</title>
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- MediaPipe Face Mesh CDNs -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+    
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="logo-container">
+            <div class="logo-icon">AI</div>
+            <div class="logo-text">AI Interview Monitoring System</div>
+        </div>
+        <div class="system-status">
+            <div class="status-dot" id="system-dot"></div>
+            <span id="system-status-text">System Idle</span>
+        </div>
+    </header>
+
+    <div class="app-container">
+        <!-- Sidebar Controls -->
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">Device Configuration</h3>
+                <div class="input-group">
+                    <label for="capture-method">Capture Method</label>
+                    <select id="capture-method">
+                        <option value="webcam">Webcam Input</option>
+                        <option value="screen">Screen Capture (Zoom/Teams)</option>
+                    </select>
+                </div>
+                <div class="input-group" id="camera-select-group">
+                    <label for="camera-select">Webcam Source</label>
+                    <select id="camera-select">
+                        <option value="">Detecting cameras...</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label for="mic-select">Microphone Source</label>
+                    <select id="mic-select">
+                        <option value="">Detecting microphones...</option>
+                    </select>
+                </div>
+                <div class="input-group" id="roi-controls-group" style="display:none; gap: 0.5rem;">
+                    <button id="btn-reset-roi" class="btn btn-secondary" style="font-size:0.8rem; padding:0.5rem 0.8rem;">
+                        Reset Screen Crop (ROI)
+                    </button>
+                    <span style="font-size:0.75rem; color:var(--text-muted); line-height:1.3; margin-top:0.25rem;">
+                        💡 <b>Instruction:</b> Click and drag a rectangle over the candidate's face in the video preview to crop and focus the face tracking.
+                    </span>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">Session Controls</h3>
+                <button id="btn-start" class="btn btn-primary">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                    Start Monitoring
+                </button>
+                <button id="btn-stop" class="btn btn-danger" disabled>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect></svg>
+                    End & Generate Report
+                </button>
+                <button id="btn-reset" class="btn btn-secondary" style="display:none;">
+                    Reset Dashboard
+                </button>
+            </div>
+
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">Visual Quality Engine</h3>
+                <div class="quality-list">
+                    <div class="quality-item">
+                        <span class="quality-label">Lighting Level</span>
+                        <span id="quality-lighting" class="quality-badge badge-success">OK</span>
+                    </div>
+                    <div class="quality-item">
+                        <span class="quality-label">Blur Check</span>
+                        <span id="quality-blur" class="quality-badge badge-success">Clear</span>
+                    </div>
+                    <div class="quality-item">
+                        <span class="quality-label">Landmark Jitter</span>
+                        <span id="quality-jitter" class="quality-badge badge-success">Stable</span>
+                    </div>
+                    <div class="quality-item">
+                        <span class="quality-label">ROI Instability</span>
+                        <span id="quality-roi" class="quality-badge badge-success">Stable</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Dashboard Workspace -->
+        <main class="dashboard-workspace" id="dashboard-view">
+            <div class="dashboard-grid">
+                <!-- Video/Mesh Stream -->
+                <div class="video-container">
+                    <video id="webcam-video" autoplay playsinline muted></video>
+                    <canvas id="webcam-canvas"></canvas>
+                    
+                    <!-- ROI Selection Overlay -->
+                    <div id="roi-overlay" class="roi-selection-overlay" style="display: none;">
+                        <div class="roi-overlay-content">
+                            <h3>Select Candidate Video Area (ROI)</h3>
+                            <p>Click and drag a box over the candidate's face in the preview below.</p>
+                            <div class="roi-overlay-buttons">
+                                <button id="btn-roi-confirm" class="btn btn-primary" disabled style="padding:0.4rem 1rem; font-size:0.85rem;">Confirm & Start</button>
+                                <button id="btn-roi-reselect" class="btn btn-secondary" style="padding:0.4rem 1rem; font-size:0.85rem;">Reselect</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="canvas-overlay-text" id="facemesh-status-badge">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                        <span>FaceMesh Active</span>
+                    </div>
+                </div>
+
+                <!-- Gauges & Info Panel -->
+                <div class="gauges-container">
+                    <h3 class="sidebar-title">Live Behavioral Metrics</h3>
+                    
+                    <div class="gauges-row">
+                        <!-- Score Ring -->
+                        <div class="score-widget">
+                            <div class="ring-container">
+                                <svg class="ring-svg">
+                                    <circle class="ring-circle-bg" cx="50" cy="50" r="40"></circle>
+                                    <circle class="ring-circle-val score" id="gauge-score" cx="50" cy="50" r="40" stroke-dasharray="251.2" stroke-dashoffset="251.2"></circle>
+                                </svg>
+                                <div class="ring-text" id="val-score">0%</div>
+                            </div>
+                            <span class="widget-label">Session Score</span>
+                        </div>
+
+                        <!-- Attention Ring -->
+                        <div class="score-widget">
+                            <div class="ring-container">
+                                <svg class="ring-svg">
+                                    <circle class="ring-circle-bg" cx="50" cy="50" r="40"></circle>
+                                    <circle class="ring-circle-val attention" id="gauge-attention" cx="50" cy="50" r="40" stroke-dasharray="251.2" stroke-dashoffset="251.2"></circle>
+                                </svg>
+                                <div class="ring-text" id="val-attention">0%</div>
+                            </div>
+                            <span class="widget-label">Attention</span>
+                        </div>
+
+                        <!-- Comm Ring -->
+                        <div class="score-widget">
+                            <div class="ring-container">
+                                <svg class="ring-svg">
+                                    <circle class="ring-circle-bg" cx="50" cy="50" r="40"></circle>
+                                    <circle class="ring-circle-val communication" id="gauge-communication" cx="50" cy="50" r="40" stroke-dasharray="251.2" stroke-dashoffset="251.2"></circle>
+                                </svg>
+                                <div class="ring-text" id="val-communication">0%</div>
+                            </div>
+                            <span class="widget-label">Communication</span>
+                        </div>
+                    </div>
+
+                    <div class="gauges-row">
+                        <!-- Integrity Ring -->
+                        <div class="score-widget">
+                            <div class="ring-container">
+                                <svg class="ring-svg">
+                                    <circle class="ring-circle-bg" cx="50" cy="50" r="40"></circle>
+                                    <circle class="ring-circle-val integrity" id="gauge-integrity" cx="50" cy="50" r="40" stroke-dasharray="251.2" stroke-dashoffset="251.2"></circle>
+                                </svg>
+                                <div class="ring-text" id="val-integrity">100%</div>
+                            </div>
+                            <span class="widget-label">Integrity</span>
+                        </div>
+
+                        <!-- Stress Ring -->
+                        <div class="score-widget">
+                            <div class="ring-container">
+                                <svg class="ring-svg">
+                                    <circle class="ring-circle-bg" cx="50" cy="50" r="40"></circle>
+                                    <circle class="ring-circle-val stress" id="gauge-stress" cx="50" cy="50" r="40" stroke-dasharray="251.2" stroke-dashoffset="251.2"></circle>
+                                </svg>
+                                <div class="ring-text" id="val-stress">0%</div>
+                            </div>
+                            <span class="widget-label">Stress</span>
+                        </div>
+
+                        <!-- Inference Confidence -->
+                        <div class="score-widget">
+                            <div class="ring-container">
+                                <svg class="ring-svg">
+                                    <circle class="ring-circle-bg" cx="50" cy="50" r="40"></circle>
+                                    <circle class="ring-circle-val" id="gauge-inference-conf" cx="50" cy="50" r="40" stroke-dasharray="251.2" stroke-dashoffset="251.2" stroke="#10b981"></circle>
+                                </svg>
+                                <div class="ring-text" id="val-inference-conf">100%</div>
+                            </div>
+                            <span class="widget-label">Inference Conf.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Traceback & Live Logs -->
+            <div class="dashboard-grid">
+                <!-- Traceback contributors -->
+                <div class="traceback-card">
+                    <h3 class="sidebar-title">Scoring Traceback Contributions</h3>
+                    <div class="traceback-list" id="traceback-factors-list">
+                        <div class="traceback-row">
+                            <span>Attention Consistency (Max +40)</span>
+                            <span class="traceback-value positive" id="trace-attention">+0</span>
+                        </div>
+                        <div class="traceback-row">
+                            <span>Stable Head Pose (Max +20)</span>
+                            <span class="traceback-value positive" id="trace-focus">+0</span>
+                        </div>
+                        <div class="traceback-row">
+                            <span>Strong Communication (Max +40)</span>
+                            <span class="traceback-value positive" id="trace-comm">+0</span>
+                        </div>
+                        <div class="traceback-row">
+                            <span>Frequent Gaze Deviation (Max -10)</span>
+                            <span class="traceback-value negative" id="trace-gaze">-0</span>
+                        </div>
+                        <div class="traceback-row">
+                            <span>Elevated Stress (Max -20)</span>
+                            <span class="traceback-value negative" id="trace-stress">-0</span>
+                        </div>
+                        <div class="traceback-row">
+                            <span>Integrity Penalty</span>
+                            <span class="traceback-value negative" id="trace-integrity">-0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live timeline log console -->
+                <div class="logs-card">
+                    <div class="logs-header">
+                        <h3 class="sidebar-title">Live Session Log</h3>
+                        <span id="log-counter" style="font-size: 0.8rem; color: var(--text-muted);">0 events</span>
+                    </div>
+                    <div class="logs-console" id="log-console">
+                        <div class="log-empty" id="log-empty-state">No events logged yet. Start monitoring.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <div class="chart-title">
+                        <span>Attention & Focus over Time</span>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="chart-attention"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">
+                        <span>Communication vs. Stress Indicators</span>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="chart-communication"></canvas>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Post-Session Report Workspace -->
+        <div class="report-workspace" id="report-view">
+            <div class="report-header">
+                <div class="report-summary-text">
+                    <h1 id="report-heading">AI Interview Session Report</h1>
+                    <p id="report-timestamp">Generated on: --</p>
+                </div>
+                <div class="report-actions">
+                    <button class="btn btn-secondary" id="btn-export-md">
+                        Copy Markdown Report
+                    </button>
+                    <button class="btn btn-primary" id="btn-print">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"></path><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                        Print/Save PDF
+                    </button>
+                </div>
+            </div>
+
+            <!-- Executive metrics -->
+            <div class="report-grid-3">
+                <div class="metric-card primary">
+                    <span class="metric-card-title">Final Session Score</span>
+                    <span class="metric-card-value" id="report-val-score">0/100</span>
+                    <span class="metric-card-desc">Weighted combination of attention, communication, posture and integrity.</span>
+                </div>
+                <div class="metric-card success">
+                    <span class="metric-card-title">Overall Integrity Level</span>
+                    <span class="metric-card-value" id="report-val-integrity">100%</span>
+                    <span class="metric-card-desc">Evaluates face presence and identity continuity over the interview.</span>
+                </div>
+                <div class="metric-card warning">
+                    <span class="metric-card-title">Avg Inference Confidence</span>
+                    <span class="metric-card-value" id="report-val-confidence">100%</span>
+                    <span class="metric-card-desc">Data credibility score adjusted by camera visibility and ambient conditions.</span>
+                </div>
+            </div>
+
+            <!-- Explanations & Traceback breakdown -->
+            <div class="report-grid-2">
+                <!-- Traceback progress bars -->
+                <div class="report-panel">
+                    <h3 class="report-panel-title">Scoring Traceback Analysis</h3>
+                    <div class="bar-chart-container" id="report-traceback-bars">
+                        <!-- Bars dynamically loaded -->
+                    </div>
+                </div>
+
+                <!-- Recruiter Insights Summary -->
+                <div class="report-panel">
+                    <h3 class="report-panel-title">Recruiter Insights & Recommendations</h3>
+                    <ul class="bullet-list" id="report-insights-list">
+                        <!-- Insights dynamically loaded -->
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Metric Specific Explanations -->
+            <div class="report-grid-3">
+                <div class="report-panel">
+                    <h3 class="report-panel-title" style="color: var(--primary);">Attention Explanation</h3>
+                    <ul class="bullet-list" id="report-attention-exp">
+                        <!-- Attention explanation points -->
+                    </ul>
+                </div>
+                <div class="report-panel">
+                    <h3 class="report-panel-title" style="color: var(--success);">Communication Explanation</h3>
+                    <ul class="bullet-list" id="report-confidence-exp">
+                        <!-- Comm explanation points -->
+                    </ul>
+                </div>
+                <div class="report-panel">
+                    <h3 class="report-panel-title" style="color: var(--warning);">Integrity Explanation</h3>
+                    <ul class="bullet-list" id="report-integrity-exp">
+                        <!-- Integrity explanation points -->
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Event Log Timeline -->
+            <div class="report-panel">
+                <h3 class="report-panel-title">Chronological Behavioral Events & Causal Chains</h3>
+                <div class="timeline-table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 15%">Timestamp</th>
+                                <th style="width: 25%">Event Type</th>
+                                <th style="width: 15%">Confidence</th>
+                                <th style="width: 45%">Contributing Causes & Reason details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="report-events-table">
+                            <tr>
+                                <td colspan="4" style="text-align: center; color: var(--text-muted); font-style: italic;">No events logged during the session.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slide-in notifications container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="tracker.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
