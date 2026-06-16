@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import time
 import tkinter as tk
-from tkinter import scrolledtext
+from tkinter import scrolledtext, messagebox
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 class SessionReporter:
@@ -184,13 +184,69 @@ class SessionReporter:
         section_lbl.pack(side=tk.TOP, fill=tk.X)
 
         text_frame = tk.Frame(root, bg="#1A202C")
-        text_frame.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=False, padx=20, pady=10)
+        text_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=20, pady=5)
 
-        txt_widget = scrolledtext.ScrolledText(text_frame, wrap=tk.WORD, height=15, 
+        txt_widget = scrolledtext.ScrolledText(text_frame, wrap=tk.WORD, height=12, 
                                                bg="#2D3748", fg="#E2E8F0", font=("Consolas", 10))
         txt_widget.pack(fill=tk.BOTH, expand=True)
         txt_widget.insert(tk.END, report_text)
-        txt_widget.configure(state=tk.DISABLED)
+
+        # User Experience / Product Review panel in Tkinter
+        ux_frame = tk.Frame(root, bg="#1A202C", pady=5)
+        ux_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=20, pady=2)
+        
+        ux_lbl = tk.Label(ux_frame, text="Rate Platform Experience (1-5):", fg="#FFB832", bg="#1A202C", font=("Helvetica", 10, "bold"))
+        ux_lbl.pack(side=tk.LEFT, padx=5)
+        
+        rating_var = tk.StringVar(value="5")
+        rating_opt = tk.OptionMenu(ux_frame, rating_var, "1", "2", "3", "4", "5")
+        rating_opt.config(bg="#2D3748", fg="#E2E8F0", activebackground="#4A5568", activeforeground="#FFFFFF", highlightthickness=0, bd=0)
+        rating_opt.pack(side=tk.LEFT, padx=5)
+        
+        comments_lbl = tk.Label(ux_frame, text="Review Comments:", fg="#FFFFFF", bg="#1A202C", font=("Helvetica", 10))
+        comments_lbl.pack(side=tk.LEFT, padx=10)
+        
+        comments_entry = tk.Entry(ux_frame, bg="#2D3748", fg="#E2E8F0", insertbackground="#E2E8F0", font=("Helvetica", 10), width=45)
+        comments_entry.pack(side=tk.LEFT, padx=5)
+
+        # Report Finalize and Save Panel
+        save_frame = tk.Frame(root, bg="#1A202C", pady=8)
+        save_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=20, pady=2)
+
+        def _on_save_report():
+            edited_text = txt_widget.get("1.0", tk.END).strip()
+
+            ux_rating = rating_var.get()
+            ux_comments = comments_entry.get().strip() or "None"
+
+            # Format markdown addition and append it to report code
+            feedback_md = f"\n\n## User Experience & Product Review\n"
+            feedback_md += f"- **Platform Rating**: {'★' * int(ux_rating)}{'☆' * (5 - int(ux_rating))} ({ux_rating}/5)\n"
+            feedback_md += f"- **User Comments**: {ux_comments}\n"
+            
+            final_report_md = edited_text + feedback_md
+
+            # Ask user for confirmation
+            confirm = messagebox.askyesno(
+                "Save Report",
+                f"Are you sure you want to write the final changes to 'session_report.md' including your Platform Rating of {ux_rating}/5?"
+            )
+            if not confirm:
+                return
+
+            # Write updated report content back to file
+            try:
+                with open("session_report.md", "w", encoding="utf-8") as f:
+                    f.write(final_report_md)
+                print("[Report] Written edited markdown with UX feedback to session_report.md")
+                messagebox.showinfo("Save Report", "Successfully finalized and saved the report to session_report.md!")
+            except Exception as ex:
+                messagebox.showerror("Save Report", f"Failed to save session_report.md: {ex}")
+                return
+
+        save_btn = tk.Button(save_frame, text="Save & Finalize Report", fg="#FFFFFF", bg="#3182CE", activebackground="#2B6CB0",
+                             activeforeground="#FFFFFF", font=("Helvetica", 10, "bold"), padx=15, command=_on_save_report)
+        save_btn.pack(side=tk.RIGHT, padx=5)
 
         def _on_close():
             plt.close(fig)

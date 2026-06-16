@@ -112,6 +112,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     initRealtimeCharts();
     await enumerateDevices();
     setupEventListeners();
+    setupReportFinalizeListeners();
     setupMediaPipe();
 });
 
@@ -1155,6 +1156,21 @@ function compileReport() {
             tableBody.appendChild(tr);
         });
     }
+
+    // Populate report editor code textarea
+    const reportCodeEditor = document.getElementById("report-code-editor");
+    if (reportCodeEditor) {
+        reportCodeEditor.value = generateMarkdownReport();
+    }
+    
+    // No Git status badges to reset
+
+    // Reset UX feedback inputs
+    selectedUXRating = 0;
+    const stars = document.querySelectorAll("#ux-star-rating .star");
+    stars.forEach(s => s.classList.remove("selected"));
+    const uxComments = document.getElementById("ux-comments");
+    if (uxComments) uxComments.value = "";
 }
 
 function fillExplanationList(elementId, items) {
@@ -1169,7 +1185,22 @@ function fillExplanationList(elementId, items) {
 }
 
 // Copy Markdown Session Report to Clipboard
+// Copy Markdown Session Report to Clipboard
 function copyMarkdownReport() {
+    const reportCodeEditor = document.getElementById("report-code-editor");
+    const md = reportCodeEditor ? reportCodeEditor.value : generateMarkdownReport();
+
+    navigator.clipboard.writeText(md).then(() => {
+        alert("Markdown report successfully copied to clipboard!");
+    }).catch(err => {
+        console.error("Could not copy markdown report: ", err);
+        alert("Failed to copy report. Markdown contents logged to developer console.");
+        console.log(md);
+    });
+}
+
+// Generate the Raw Markdown String
+function generateMarkdownReport() {
     const finalAverages = scoringEngine.sessionAverages;
     const explanationEngine = scoringEngine.explanationEngine;
     
@@ -1242,11 +1273,98 @@ function copyMarkdownReport() {
         md += `- ${insight}\n`;
     });
 
-    navigator.clipboard.writeText(md).then(() => {
-        alert("Markdown report successfully copied to clipboard!");
-    }).catch(err => {
-        console.error("Could not copy markdown report: ", err);
-        alert("Failed to copy report. Markdown contents logged to developer console.");
-        console.log(md);
+    return md;
+}
+
+// Setup Event Listeners for Report Finalization and UX Feedback
+function setupReportFinalizeListeners() {
+    const btnSaveReport = document.getElementById("btn-save-report");
+    const finalizeConfirmModal = document.getElementById("finalize-confirm-modal");
+    const btnFinalizeConfirmYes = document.getElementById("btn-finalize-confirm-yes");
+    const btnFinalizeConfirmNo = document.getElementById("btn-finalize-confirm-no");
+    const reportCodeEditor = document.getElementById("report-code-editor");
+
+    // UX Feedback setup
+    setupUXFeedbackHandlers();
+
+    if (btnSaveReport) {
+        btnSaveReport.addEventListener("click", () => {
+            if (!reportCodeEditor.value.trim()) {
+                alert("The report markdown code is empty.");
+                return;
+            }
+            finalizeConfirmModal.style.display = "flex";
+        });
+    }
+
+    if (btnFinalizeConfirmNo) {
+        btnFinalizeConfirmNo.addEventListener("click", () => {
+            finalizeConfirmModal.style.display = "none";
+        });
+    }
+
+    if (btnFinalizeConfirmYes) {
+        btnFinalizeConfirmYes.addEventListener("click", () => {
+            finalizeConfirmModal.style.display = "none";
+            
+            showToast("Behavior", "Report Save", "Saving final report contents...");
+            
+            setTimeout(() => {
+                // Copy final content to clipboard for easy pasting/saving
+                navigator.clipboard.writeText(reportCodeEditor.value).then(() => {
+                    showToast("Integrity", "Save Success", "Report finalized and copied to clipboard!");
+                }).catch(err => {
+                    console.error("Could not copy finalized report: ", err);
+                    showToast("Behavior", "Save Info", "Report finalized successfully!");
+                });
+            }, 500);
+        });
+    }
+}
+
+let selectedUXRating = 0;
+
+function setupUXFeedbackHandlers() {
+    const stars = document.querySelectorAll("#ux-star-rating .star");
+    const uxComments = document.getElementById("ux-comments");
+
+    stars.forEach(star => {
+        star.addEventListener("click", (e) => {
+            const val = parseInt(e.target.getAttribute("data-value"));
+            selectedUXRating = val;
+            
+            stars.forEach((s, idx) => {
+                if (idx < val) {
+                    s.classList.add("selected");
+                } else {
+                    s.classList.remove("selected");
+                }
+            });
+
+            updateReportCodeWithFeedback();
+        });
     });
+
+    if (uxComments) {
+        uxComments.addEventListener("input", () => {
+            updateReportCodeWithFeedback();
+        });
+    }
+}
+
+function updateReportCodeWithFeedback() {
+    const reportCodeEditor = document.getElementById("report-code-editor");
+    if (!reportCodeEditor) return;
+
+    let baseMd = generateMarkdownReport();
+    const comments = document.getElementById("ux-comments").value.trim() || "None";
+
+    if (selectedUXRating > 0 || comments !== "None") {
+        let feedbackMd = `\n## User Experience & Product Review\n`;
+        feedbackMd += `- **Platform Rating**: ${"★".repeat(selectedUXRating)}${"☆".repeat(5 - selectedUXRating)} (${selectedUXRating}/5)\n`;
+        feedbackMd += `- **User Comments**: ${comments}\n`;
+        baseMd += feedbackMd;
+    }
+
+    reportCodeEditor.value = baseMd;
 }
